@@ -1,0 +1,502 @@
+package Analizadores.Cup;
+
+
+import Analizadores.Flex.Lexer;
+import Instructions.Asignacion;
+import Instructions.BaseIf;
+import java_cup.runtime.Symbol;
+import Objetos.Token;
+import Tablas.TablaSimbolos.TablaSimbolos;
+import Tablas.TablaTipos.TablaTipos;
+import Objetos.Logica;
+import Instructions.Instruction;
+import Instructions.Print;
+import Instructions.Println;
+import Objetos.AccionVariable;
+import Objetos.Condicional;
+import Objetos.Dato;
+import Objetos.Expresion;
+import java.util.ArrayList;
+import Instructions.While;
+import Instructions.Declaracion;
+import Instructions.DoWhile;
+import Instructions.Else;
+import Instructions.If;
+import Instructions.For;
+import Instructions.Elsif;
+import Objetos.Arreglo;
+import java.util.List;
+import java_cup.runtime.XMLElement;
+import javax.swing.JTextArea;
+import Errores.Errores;
+import Errores.Error;
+
+
+parser code {:
+
+    TablaSimbolos tablaSimbolos;
+    TablaTipos tablaTipos;
+    Logica logica;
+    JTextArea area;
+
+
+    public parser(Lexer lex,TablaSimbolos tablaSimbolos,TablaTipos tablaTipos,JTextArea area) {
+        super(lex);
+        this.tablaSimbolos = tablaSimbolos;
+        this.tablaTipos = tablaTipos;
+        logica = new Logica();
+        this.area=area;
+    }
+
+
+  public void syntax_error(Symbol cur_token) {
+        
+        System.out.println("OCURRIO UN ERROR SINTACTICO, FILA: " + cur_token.left + ", COLUMNA: " +cur_token.right + " TOKEN:" +cur_token.value);
+	Errores.crearError("SINTACTICO","OCURRIO UN ERROR SINTACTICO CON EL TOKEN: "+cur_token.value,cur_token.left,cur_token.right);
+	Error error = Errores.ultimoError();
+	logica.mostrarError(error,area);
+    }
+    
+	
+:}
+
+/* Terminals (tokens returned by the scanner). */
+terminal Object BOOLEAN,CHAR,BYTE,INT ,LONG,FLOAT,DOUBLE,STRING,NOT,AND,OR,TRUEE,FALSEE,ARRAY;
+terminal Object IF,ELSIF,ELSE,WHILE,DO,FOR,PRINT,PRINTLN;
+terminal Object MENOR,MAYOR,MENOR_IGUAL,MAYOR_IGUAL,DIFERENTE,IGUAL;
+terminal Object COMA,PUNTO_COMA,DOS_PUNTOS,PARENTESIS_ABIERTO,PARENTESIS_CERRADO,CORCHETE_ABIERTO,CORCHETE_CERRADO;
+terminal Object SUMA,RESTA,MULTIPLICACION,DIVISION,MODULO,ASIGNACION;
+terminal Object IDD,NUMERO_ENTERO,NUMERO_DOUBLE,NUMERO_FLOAT,NUMERO_LONG,LEXEMA_STRING;
+
+         
+
+/* Non-terminals */
+
+non terminal Object global;
+non terminal List<Instruction> instructions,instruction, instructionsCiclo, instructionCiclo,asignacion_arreglos,estructura_print,estructura_println,estructura_for,estructura_if, estructura_while ,estructura_do_while;
+non terminal Arreglo arreglos;
+non terminal Else base_else;
+non terminal Elsif base_elsif;
+non terminal BaseIf base_if;
+non terminal List<Elsif> ciclo_elsif;
+non terminal List<Dato> tokens,ids;
+non terminal List<AccionVariable> variables;
+non terminal Dato valor_literal,valor_condicion;
+non terminal Expresion expresion;
+non terminal Condicional condicional ,condicion;
+non terminal String tipo;
+non terminal AccionVariable asignacion,declaracion;
+non terminal Boolean signo;
+
+precedence left     SUMA, RESTA;
+precedence left     MULTIPLICACION, DIVISION,MODULO;
+
+precedence left     OR;
+precedence left     AND;
+precedence left     NOT;
+
+
+/* The grammar */
+start with global;
+
+global ::= instructions:e {:
+	logica.operar(e,area);
+:};
+
+instructions ::= instructions:e1 instruction:e2 {:
+		for(int i =0;i<e2.size();i++){
+			e1.add(e2.get(i));
+		}
+		RESULT = e1;
+		:}
+	| instruction:e {:RESULT = e;:};
+
+instruction ::= variables:lista PUNTO_COMA {:
+List instructions = new ArrayList<>();
+
+	for(int i=0;i<lista.size();i++){
+		
+		Object valor = null;
+			if(lista.get(i).getTipoDato().equals("String")){
+			 valor = "a";
+			}else if(lista.get(i).getTipoDato().equals("Integer")){
+			 valor = 1;
+			}else if(lista.get(i).getTipoDato().equals("Byte")){
+			Byte bytee = 2;
+			valor = bytee;
+			}else if(lista.get(i).getTipoDato().equals("Long")){
+			Long longg= Long.parseLong("1");
+			valor = longg;
+			}else if(lista.get(i).getTipoDato().equals("Float")){
+			Float floatt = 1.1f;
+			valor = floatt;
+			}else if(lista.get(i).getTipoDato().equals("Double")){
+			valor = 5.5;
+			}else if(lista.get(i).getTipoDato().equals("Boolean")){
+			valor = true;
+			}else if(lista.get(i).getTipoDato().equals("Char")){
+			valor = "a";
+			}
+			Declaracion declaracion = new Declaracion(lista.get(i).getId(), tablaSimbolos, tablaTipos, false, valor,null);
+			instructions.add(declaracion);
+			
+			if(lista.get(i).getTipoAccion().equals("ASIGNACION")){
+				Asignacion asignacion = new Asignacion(lista.get(i).getId(), 1, lista.get(i).getExpresion(),false,null,tablaSimbolos,tablaTipos);
+				instructions.add(asignacion);
+			}	
+	}
+
+		RESULT = instructions;
+		
+	
+	:}
+	
+	| asignacion:accion PUNTO_COMA{:
+									List<Instruction> instructions = new ArrayList<>();
+                  Asignacion asignacion = new Asignacion(accion.getId(), 1, accion.getExpresion(),false,null,tablaSimbolos,tablaTipos);
+									instructions.add(asignacion);
+									RESULT = instructions;
+				
+			:}
+	| arreglos:e  PUNTO_COMA {:
+		List<Instruction> instructions = new ArrayList<>();
+
+		for(int i=0;i<e.getLista().size();i++){
+		
+		Object valor = null;
+			if(e.getTipo().equals("String")){
+			 valor = "a";
+			}else if(e.getTipo().equals("Integer")){
+			 valor = 1;
+			}else if(e.getTipo().equals("Byte")){
+			Byte bytee = 2;
+			valor = bytee;
+			}else if(e.getTipo().equals("Long")){
+			Long longg= Long.parseLong("1");
+			valor = longg;
+			}else if(e.getTipo().equals("Float")){
+			Float floatt = 1.1f;
+			valor = floatt;
+			}else if(e.getTipo().equals("Double")){
+			valor = 5.5;
+			}else if(e.getTipo().equals("Boolean")){
+			valor = true;
+			}else if(e.getTipo().equals("Char")){
+			valor = "a";
+			}
+			Declaracion declaracion = new Declaracion(e.getLista().get(i), tablaSimbolos, tablaTipos, true, valor,e.getExpresion());
+			instructions.add(declaracion);
+		}		
+		RESULT = instructions;
+	
+	:}
+	|asignacion_arreglos:e   PUNTO_COMA {:  
+		
+		RESULT = e;
+	
+	:}
+	|estructura_if:e {:RESULT = e;:}
+	|estructura_while:e {:RESULT = e;:}
+	| estructura_do_while:e {:RESULT = e;:}
+	|estructura_for:e {:RESULT = e;:}
+	|estructura_print:e PUNTO_COMA  {:RESULT = e;:}
+	|estructura_println:e  PUNTO_COMA {:RESULT = e;:};
+
+tipo ::= BOOLEAN {:RESULT="Boolean";:}
+	|CHAR {:RESULT="Char";:}
+	|BYTE {:RESULT="Byte";:}
+	|INT {:RESULT="Integer";:}
+	|LONG {:RESULT="Long";:}
+	|FLOAT {:RESULT="Float";:}
+	|DOUBLE {:RESULT="Double";:}
+	|STRING {:RESULT="String";:};
+	
+variables ::=  variables:e1 COMA asignacion:e2 {:
+	String tipo = e1.get(0).getTipoDato();
+	e2.setTipoDato(tipo);
+	e1.add(e2);
+	RESULT = e1; :}
+	
+	|variables:e1 COMA declaracion:e2 {:
+	String tipo = e1.get(0).getTipoDato();
+	e2.setTipoDato(tipo);
+	e1.add(e2);
+	RESULT = e1;
+	:}
+	
+	|tipo:e1 asignacion:e2
+	{:
+		List<AccionVariable> list = new ArrayList<>();
+		e2.setTipoDato(e1);
+		list.add(e2);
+		RESULT = list;
+	:}
+	|tipo:e1 declaracion:e2 
+	{:
+		List<AccionVariable> list = new ArrayList<>();
+		e2.setTipoDato(e1);
+		list.add(e2);
+		RESULT = list;
+	:};
+
+asignacion ::= IDD:e ASIGNACION expresion:expresion {:
+		Dato dato = new Dato(e.toString(),"VARIABLE",null,true);		
+		RESULT = new AccionVariable("ASIGNACION",dato,expresion);	
+		:};
+declaracion ::= IDD:e {:
+		Dato dato = new Dato(e.toString(),"VARIABLE",null,true);		
+		RESULT = new AccionVariable("DECLARACION",dato,null);
+		:};
+
+arreglos ::= ARRAY tipo:tipo CORCHETE_ABIERTO NUMERO_ENTERO:expresion CORCHETE_CERRADO ids:ids
+	{:
+		Expresion expr = new Expresion(new Dato(expresion.toString(),"ENTERO",Integer.parseInt(expresion.toString()),false), tablaSimbolos,tablaTipos);
+    Arreglo arreglo = new Arreglo(tipo, expr, ids);     
+		RESULT = arreglo;
+	:};
+
+
+ids ::= ids:e1 COMA IDD:e2 
+	{:
+	Dato dato = new Dato(e2.toString(),"VARIABLE",null,true);
+	e1.add(dato);
+	RESULT = e1;
+	:}
+	| IDD:e 
+	{:
+	List<Dato> list = new ArrayList<>();
+	Dato dato = new Dato(e.toString(),"VARIABLE",null,true);
+	list.add(dato);
+	RESULT = list;
+	:};
+
+asignacion_arreglos ::= IDD:id CORCHETE_ABIERTO NUMERO_ENTERO:numero CORCHETE_CERRADO ASIGNACION expresion:expresion 
+	{:
+		List<Instruction> lista = new ArrayList<>();
+		Asignacion asignacion = new Asignacion(new Dato(id.toString(),"ARREGLO",null,true), 1, expresion,true,Integer.parseInt(numero.toString()),tablaSimbolos,tablaTipos);
+		lista.add(asignacion);
+		RESULT = lista;
+	:};
+
+
+estructura_if ::= base_if:e {:If iff = new If(e,null,null,tablaSimbolos,tablaTipos);
+		List<Instruction> lista = new ArrayList<>();
+		lista.add(iff);
+		RESULT = lista;
+	:}
+	| base_if:e1 ciclo_elsif:e2 {:
+		If iff = new If(e1,e2,null,tablaSimbolos,tablaTipos);
+		List<Instruction> lista = new ArrayList<>();
+		lista.add(iff);
+		RESULT = lista;
+	:} 
+	| base_if:e1 base_else:e2 {:
+		If iff = new If(e1,null,e2,tablaSimbolos,tablaTipos);
+		List<Instruction> lista = new ArrayList<>();
+		lista.add(iff);
+		RESULT = lista;
+	:} 
+	| base_if:e1 ciclo_elsif:e2 base_else:e3 {:
+		If iff = new If(e1,e2,e3,tablaSimbolos,tablaTipos);
+		List<Instruction> lista = new ArrayList<>();
+		lista.add(iff);
+		RESULT = lista;
+	:};
+
+
+ciclo_elsif ::= ciclo_elsif:e1 base_elsif:e2 {:
+		e1.add(e2);
+		RESULT = e1;
+	:} 
+	| base_elsif:e {:
+		List<Elsif> lista = new ArrayList<>();
+		lista.add(e);
+		RESULT = lista;
+	:};
+
+base_if ::= IF PARENTESIS_ABIERTO condicional:condicional PARENTESIS_CERRADO CORCHETE_ABIERTO instructions:instructions CORCHETE_CERRADO {:
+
+		BaseIf base = new BaseIf(condicional,instructions);
+		RESULT = base;
+		:} 
+		/*| IF PARENTESIS_ABIERTO condicional PARENTESIS_CERRADO instruction */;
+		
+base_else ::= ELSE CORCHETE_ABIERTO instructions:e CORCHETE_CERRADO {:
+			
+		Else sino = new Else(e);
+		RESULT = sino;
+		:}
+		/*| ELSE instruction*/;
+
+base_elsif ::= ELSIF PARENTESIS_ABIERTO condicional:condicional PARENTESIS_CERRADO CORCHETE_ABIERTO instructions:instructions CORCHETE_CERRADO {:
+		Elsif elsif = new Elsif(condicional, instructions);
+		RESULT = elsif;
+		:}
+		/*| ELSIF PARENTESIS_ABIERTO condicional PARENTESIS_CERRADO instruction*/;
+
+
+estructura_while ::= WHILE PARENTESIS_ABIERTO condicional:e1 PARENTESIS_CERRADO CORCHETE_ABIERTO instructionsCiclo:e2 CORCHETE_CERRADO {:
+			While nuevo = new While(e1,e2,tablaSimbolos,tablaTipos);
+			List<Instruction> lista = new ArrayList<>();
+			lista.add(nuevo);
+			RESULT = lista;
+			
+		:}
+		|  WHILE PARENTESIS_ABIERTO condicional:e1 PARENTESIS_CERRADO instructionCiclo:e2 {:
+			List<Instruction> lista = new ArrayList<>();	
+			lista.add(e2.get(0));
+			While nuevo = new While(e1,lista,tablaSimbolos,tablaTipos);
+			List<Instruction> listaFinal = new ArrayList<>();
+			listaFinal.add(nuevo);
+			RESULT = listaFinal;
+		:};
+
+estructura_do_while ::= DO CORCHETE_ABIERTO instructionsCiclo:e1 CORCHETE_CERRADO WHILE PARENTESIS_ABIERTO condicional:e2 PARENTESIS_CERRADO {:
+			DoWhile nuevo = new DoWhile(e2,e1,tablaTipos,tablaSimbolos);
+			List<Instruction> listaFinal = new ArrayList<>();
+			listaFinal.add(nuevo);
+			RESULT = listaFinal;
+		:}
+		| DO instructionCiclo:e1 WHILE PARENTESIS_ABIERTO condicional:e2 PARENTESIS_CERRADO {:
+			List<Instruction> lista = new ArrayList<>();
+			lista.add(e1.get(0));
+			DoWhile nuevo = new DoWhile(e2,lista,tablaTipos,tablaSimbolos);
+			List<Instruction> listaFinal = new ArrayList<>();
+			listaFinal.add(nuevo);
+			RESULT = listaFinal;
+		:};
+
+estructura_for ::= FOR PARENTESIS_ABIERTO IDD:id ASIGNACION expresion:expr DOS_PUNTOS condicional:condicional DOS_PUNTOS signo:signo expresion:expresion2 PARENTESIS_CERRADO CORCHETE_ABIERTO instructionsCiclo:lista CORCHETE_CERRADO {: 
+			Dato dato = new Dato(id.toString(),"VARIABLE",null,true);			
+			For nuevo = new For(expr,expresion2,condicional,dato,signo,lista,tablaSimbolos,tablaTipos);
+			List<Instruction> listaFinal = new ArrayList<>();
+			listaFinal.add(nuevo);
+			RESULT = listaFinal;
+		:}
+		| FOR PARENTESIS_ABIERTO IDD:id IGUAL expresion:expr DOS_PUNTOS condicional:condicional DOS_PUNTOS signo:signo expresion:expresion2 PARENTESIS_CERRADO instructionCiclo:instr {: 
+			Dato dato = new Dato(id.toString(),"VARIABLE",null,true);
+			List<Instruction> lista = new ArrayList<>();
+			lista.add(instr.get(0));
+			For nuevo = new For(expr,expresion2,condicional,dato,signo,lista,tablaSimbolos,tablaTipos);
+			List<Instruction> listaFinal = new ArrayList<>();
+			listaFinal.add(nuevo);
+			RESULT = listaFinal;
+			:};
+
+signo ::= SUMA {:RESULT = true;:}|RESTA {:RESULT = false;:};
+
+estructura_print ::= PRINT CORCHETE_ABIERTO tokens:e  CORCHETE_CERRADO {:
+
+		List<Dato> list = new ArrayList<>();
+			for(int i =0;i<e.size();i++){
+			  list.add(e.get(i));
+			}
+			Instruction inst = new Print(list,tablaSimbolos,tablaTipos);
+			List<Instruction> instructions = new ArrayList<>();
+			instructions.add(inst);
+			RESULT = instructions;
+
+:}
+		| PRINT valor_literal:e {:
+			List<Dato> list = new ArrayList<>();
+			list.add(e);
+			Instruction inst  = new Print(list,tablaSimbolos,tablaTipos);
+			List<Instruction> instructions = new ArrayList<>();
+			instructions.add(inst);
+			RESULT = instructions;					
+		:};
+
+estructura_println ::= PRINTLN CORCHETE_ABIERTO tokens:e CORCHETE_CERRADO{:
+
+			List<Dato> list = new ArrayList<>();
+			for(int i =0;i<e.size();i++){
+			  list.add(e.get(i));
+			}
+			Instruction inst = new Println(list,tablaSimbolos,tablaTipos);
+			List<Instruction> instructions = new ArrayList<>();
+			instructions.add(inst);
+			RESULT = instructions;
+
+:}
+		| PRINTLN valor_literal:e 
+		{:
+			List<Dato> list = new ArrayList<>();
+			list.add(e);
+			Instruction inst = new Println(list,tablaSimbolos,tablaTipos);
+			List<Instruction> instructions = new ArrayList<>();
+			instructions.add(inst);
+			RESULT = instructions;				
+		:};
+
+tokens ::= tokens:e1 COMA valor_literal:e2 {:e1.add(e2);RESULT = e1;:}
+	| valor_literal:e {:List<Dato> list = new ArrayList<>(); list.add(e); RESULT = list;:};
+
+
+expresion ::= expresion:e1 SUMA expresion:e2 {:RESULT = new Expresion("+",e1,e2,tablaTipos);:}
+	| expresion:e1 RESTA expresion:e2 {:RESULT = new Expresion("-",e1,e2,tablaTipos);:}
+	| expresion:e1 MULTIPLICACION expresion:e2 {:RESULT = new Expresion("*",e1,e2,tablaTipos);:}
+	| expresion:e1 DIVISION expresion:e2 {:RESULT = new Expresion("/",e1,e2,tablaTipos);:}
+	| expresion:e1 MODULO expresion:e2 {:RESULT = new Expresion("%",e1,e2,tablaTipos);:}
+	| RESTA expresion:e {:RESULT = new Expresion("--",e,tablaTipos);:}
+	| valor_literal:e {:RESULT = new Expresion(e,tablaSimbolos,tablaTipos);:};
+
+valor_literal ::= IDD:e  {:RESULT= new Dato(e.toString(),"VARIABLE",null,true);:}
+	|NUMERO_ENTERO:e {:RESULT= new Dato(e.toString(),"ENTERO",Integer.parseInt(e.toString()),false);:}
+	|NUMERO_DOUBLE:e {:RESULT= new Dato(e.toString(),"DOUBLE",Double.parseDouble(e.toString()),false);:}
+	|NUMERO_FLOAT:e {:RESULT= new Dato(e.toString(),"FLOAT",Float.parseFloat(e.toString()),false);:}
+	|NUMERO_LONG:e {:RESULT= new Dato(e.toString(),"LONG",Long.parseLong(e.toString()),false);:}
+	|LEXEMA_STRING:e {:RESULT= new Dato(e.toString(),"STRING",e.toString(),false);:}
+	|TRUEE:e {:RESULT= new Dato("true","BOOLEAN",true,false);:}
+	|FALSEE:e {:RESULT= new Dato("false","BOOLEAN",false,false);:}
+	|IDD:e1 CORCHETE_ABIERTO expresion:e2 CORCHETE_CERRADO {:RESULT = new Dato(e1.toString(),"ARREGLO",e2,false);:}; 
+
+
+condicional ::= condicional:e1 OR condicional:e2 {:RESULT = new Condicional("OR",e1,e2);:}
+	| condicional:e1 AND condicional:e2 {:RESULT = new Condicional("AND",e1,e2);:}
+	| NOT condicional:e {:RESULT = new Condicional("NOT",e);:}
+	| condicion:e {:RESULT = e;:};
+
+condicion ::= valor_condicion:e1 MAYOR valor_condicion:e2 {:RESULT= new Condicional(">", new Condicional(e1, tablaSimbolos), new Condicional(e2, tablaSimbolos));:}
+	| valor_condicion:e1 MENOR valor_condicion:e2 {:RESULT= new Condicional("<", new Condicional(e1, tablaSimbolos), new Condicional(e2, tablaSimbolos));:}
+	| valor_condicion:e1 MAYOR_IGUAL valor_condicion:e2 {:RESULT= new Condicional(">=", new Condicional(e1, tablaSimbolos), new Condicional(e2, tablaSimbolos));:}
+	| valor_condicion:e1 MENOR_IGUAL valor_condicion:e2 {:RESULT= new Condicional("<=", new Condicional(e1, tablaSimbolos), new Condicional(e2, tablaSimbolos));:}
+	| valor_condicion:e1 DIFERENTE valor_condicion:e2 {:RESULT= new Condicional("!=", new Condicional(e1, tablaSimbolos), new Condicional(e2, tablaSimbolos));:}
+	| valor_condicion:e1 IGUAL valor_condicion:e2 {:RESULT= new Condicional("==", new Condicional(e1, tablaSimbolos), new Condicional(e2, tablaSimbolos));:}
+	| valor_condicion:e1 {:RESULT = new Condicional(e1,tablaSimbolos);:};
+
+valor_condicion ::= IDD:e {:RESULT = new Dato(e.toString(),"VARIABLE",null,true);:}
+	|TRUEE:e {:RESULT = new Dato("true","BOOLEAN",true,false);:}
+	|FALSEE:e {:RESULT = new Dato("false","BOOLEAN",false,false);:}
+	|NUMERO_ENTERO:e {:RESULT= new Dato(e.toString(),"ENTERO",Integer.parseInt(e.toString()),false);:}
+	|NUMERO_DOUBLE:e {:RESULT= new Dato(e.toString(),"DOUBLE",Double.parseDouble(e.toString()),false);:}
+	|NUMERO_FLOAT:e {:RESULT= new Dato(e.toString(),"FLOAT",Float.parseFloat(e.toString()),false);:}
+	|NUMERO_LONG:e {:RESULT= new Dato(e.toString(),"LONG",Long.parseLong(e.toString()),false);:}
+	|IDD:e1 CORCHETE_ABIERTO NUMERO_ENTERO:e2 CORCHETE_CERRADO {:RESULT = new Dato(e1.toString(),"ARREGLO",Integer.parseInt(e2.toString()),false);:};
+	
+
+instructionsCiclo ::= instructionsCiclo:e1 instructionCiclo:e2 {:
+		for(int i =0;i<e2.size();i++){
+				e1.add(e2.get(i));
+		}
+		RESULT = e1;:}
+	| instructionCiclo:e {:RESULT = e;:};
+
+instructionCiclo ::=  asignacion:accion PUNTO_COMA {:
+										List<Instruction> instructions = new ArrayList<>();
+                  Asignacion asignacion = new Asignacion(accion.getId(), 1, accion.getExpresion(),false,null,tablaSimbolos,tablaTipos);
+									instructions.add(asignacion);
+									RESULT = instructions;
+									:}
+	|asignacion_arreglos:e  PUNTO_COMA PUNTO_COMA {:RESULT = e;:}
+	|estructura_if:e {:RESULT = e;:}
+	|estructura_while:e {:RESULT = e;:}
+	| estructura_do_while:e {:RESULT = e;:}
+	|estructura_for:e {:RESULT = e;:}
+	|estructura_print:e PUNTO_COMA {:RESULT = e;:}
+	|estructura_println:e PUNTO_COMA {:RESULT = e;:};
+
+
+
+
+
+
